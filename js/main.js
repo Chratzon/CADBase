@@ -887,6 +887,7 @@ function refreshSheet() {
     ${row('Ausrichtung', `<select data-s="orient"><option value="quer" ${sh.orient === 'quer' ? 'selected' : ''}>Querformat</option><option value="hoch" ${sh.orient === 'hoch' ? 'selected' : ''}>Hochformat</option></select>`)}
     ${row('Maßstab 1:', `<input data-s="sc" list="scales" value="${sh.sc}" inputmode="decimal"><datalist id="scales">${M.SCALES.map((s) => `<option value="${s}">`).join('')}</datalist>`)}
     ${row('Blatt anzeigen', `<input type="checkbox" data-s="show" ${sh.show ? 'checked' : ''}>`)}
+    ${row('Faltmarken DIN 824', `<input type="checkbox" data-s="fold" ${sh.fold !== false ? 'checked' : ''}>`)}
     <div class="pinfo">Papier ${W} × ${H} mm · Zeichenfläche ca. ${fmtNum((W - 25) * sh.sc / 1000, 2)} × ${fmtNum((H - 10) * sh.sc / 1000, 2)} m (Natur)</div>
     <div class="pbtns"><button data-act="place">Blatt positionieren</button><button data-act="center">Auf Zeichnung zentrieren</button><button data-act="zoom">Blatt zeigen</button><button data-act="autoscale">Passenden Maßstab wählen</button></div>
     <div class="psec">Schriftfeld</div>
@@ -903,6 +904,7 @@ $('#tab-sheet').addEventListener('change', (ev) => {
   if (t.dataset.s) {
     const k = t.dataset.s;
     if (k === 'show') sh.show = t.checked;
+    else if (k === 'fold') sh.fold = t.checked;
     else if (k === 'sc') { const v = parseFloat(t.value.replace(',', '.')); if (v > 0) sh.sc = v; }
     else sh[k] = t.value;
     app.commit(); refreshSheet(); updateHeader();

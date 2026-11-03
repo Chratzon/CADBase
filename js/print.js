@@ -15,6 +15,26 @@ export function frameRect(sh) { const [W, H] = paperSize(sh); return { x0: 20, y
 
 const TBW = 180, TBH = 32;
 
+// Faltlinien nach DIN 824 Form A (mit 20 mm Heftrand) auf A4 210 x 297
+// v: x-Positionen ab linkem Rand, h: y-Positionen ab unterem Rand, corner: Eckumschlag oben links
+export function foldLines(W, H) {
+  const v = [], h = [];
+  if (W * H <= 297 * 210 + 1) return { v, h, corner: null }; // A4 wird nicht gefaltet
+  if (W > 210 + 1) {
+    const c = W - 190;
+    if (W <= 430) { v.push((c + 20) / 2, c); }
+    else {
+      let last = 210; v.push(last);
+      while (c - last > 380) { last += 190; v.push(last); }
+      if (c - last <= 200) v.push(last + (W - last) / 2);
+      else { v.push((last + c) / 2); v.push(c); }
+    }
+  }
+  for (let y = 297; y < H - 1; y += 297) h.push(y);
+  const corner = (h.length && W >= 590) ? { x: 105, y: H - 297 } : null;
+  return { v, h, corner };
+}
+
 // Rahmen + Schriftfeld in Modellkoordinaten zeichnen
 export function emitSheet(B, sh) {
   const M = sheetMaps(sh); const m = (x, y) => M.toModel(x, y);
@@ -26,6 +46,12 @@ export function emitSheet(B, sh) {
   B.stroke(rect(F.x0, F.y0, F.x1, F.y1), true, thick);
   // Faltmarke / Lochrand-Markierung links mittig
   B.stroke([m(5, M.H / 2), m(12, M.H / 2)], false, thin);
+  if (sh.fold !== false) {
+    const F2 = foldLines(M.W, M.H); const L = 8, fm = { color: black, lw: 0.35, dash: [] };
+    for (const x of F2.v) { B.stroke([m(x, 0), m(x, L)], false, fm); B.stroke([m(x, M.H), m(x, M.H - L)], false, fm); }
+    for (const yb of F2.h) { const y = M.H - yb; B.stroke([m(0, y), m(L, y)], false, fm); B.stroke([m(M.W, y), m(M.W - L, y)], false, fm); }
+    if (F2.corner) { const c = F2.corner; B.stroke([m(c.x, 0), m(c.x - 3, 6)], false, fm); B.stroke([m(0, c.y), m(6, c.y - 3)], false, fm); }
+  }
   const x1 = F.x1, y1 = F.y1, x0 = x1 - TBW, y0 = y1 - TBH;
   B.fill([rect(x0, y0, x1, y1)], '#ffffff');
   B.stroke(rect(x0, y0, x1, y1), true, thick);

@@ -35,7 +35,7 @@ export function newDoc(name = 'Neue Zeichnung') {
     layers: defaultLayers(), cur: 'L0',
     ents: [],
     settings: { dimUnit: 'mm', dimDec: 1, dimText: 2.5, dimTick: 'slash', grid: 10, textH: 3.5, ext3d: 300 },
-    sheet: { fmt: 'A3', orient: 'quer', sc: 10, cx: 0, cy: 0, show: true,
+    sheet: { fmt: 'A3', orient: 'quer', sc: 10, cx: 0, cy: 0, show: true, fold: true,
       tb: { firma: '', projekt: '', titel: 'Detail', plannr: '', index: '', gez: '', datum: new Date().toLocaleDateString('de-DE') } },
   };
 }
