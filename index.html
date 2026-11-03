@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CADBase</title>
+<meta name="description" content="CADBase – schnelle 2D-Detailzeichnungen im Browser: Schnitte, Schraffuren, Bemaßung, Druck A4 bis A0.">
+<meta name="theme-color" content="#1d2733">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20L20 3M3 20h17M20 3v17" /><path d="M8 20v-3M13 20v-3M20 8h-3M20 13h-3"/></svg><span>CAD<b>Base</b></span></div>
+    <button id="btnFile" class="tb">Datei ▾</button>
+    <span id="docName" class="docname" title="Umbenennen">Zeichnung</span>
+    <div class="sep"></div>
+    <button id="btnUndo" class="ib" title="Rückgängig (Strg+Z)"><svg viewBox="0 0 20 20"><path d="M7 5L3 9l4 4"/><path d="M3 9h9a5 5 0 0 1 0 10H9"/></svg></button>
+    <button id="btnRedo" class="ib" title="Wiederholen (Strg+Y)"><svg viewBox="0 0 20 20"><path d="M13 5l4 4-4 4"/><path d="M17 9H8a5 5 0 0 0 0 10h3"/></svg></button>
+    <button id="btnFit" class="ib" title="Alles zeigen (Z)"><svg viewBox="0 0 20 20"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><rect x="7" y="7" width="6" height="6"/></svg></button>
+    <div class="seg" id="viewSeg"><button data-v="2d" class="on">2D</button><button data-v="3d">3D</button></div>
+    <div class="grow"></div>
+    <button id="btnSheet" class="tb" title="Blatt, Maßstab, Schriftfeld">A3 quer · 1:10</button>
+    <button id="btnPrint" class="tb primary" title="Drucken / PDF (Strg+P)"><svg viewBox="0 0 20 20"><path d="M5 8V3h10v5M5 14H3V8h14v6h-2"/><rect x="5" y="12" width="10" height="5"/></svg><span>Drucken</span></button>
+    <button id="btnPanel" class="ib only-mobile" title="Panel"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
+  </header>
+  <div id="optbar"></div>
+  <div id="main">
+    <nav id="tools"></nav>
+    <div id="stage">
+      <canvas id="cv"></canvas>
+      <canvas id="cv3d" hidden></canvas>
+      <div id="v3dbar" hidden>
+        <button data-view="iso">Iso</button><button data-view="iso2">Iso 2</button><button data-view="vorne">Vorne</button><button data-view="seite">Seite</button><button data-view="oben">Oben</button>
+        <label>Standardhöhe mm <input id="ext3d" size="5" inputmode="decimal"></label>
+        <button id="ins3d" class="primary">Als Isometrie in Zeichnung</button>
+      </div>
+      <div id="chips"></div>
+      <div id="toast"></div>
+    </div>
+    <aside id="panel">
+      <div class="tabs">
+        <button data-tab="props" class="on">Eigenschaften</button>
+        <button data-tab="layers">Layer</button>
+        <button data-tab="sheet">Blatt</button>
+        <button data-tab="lib">Aufbauten</button>
+      </div>
+      <div id="tab-props" class="tab on"></div>
+      <div id="tab-layers" class="tab"></div>
+      <div id="tab-sheet" class="tab"></div>
+      <div id="tab-lib" class="tab"></div>
+    </aside>
+  </div>
+  <footer id="status">
+    <span id="prompt"></span>
+    <div class="cmdwrap"><input id="cmd" placeholder="Wert…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><button id="btnCmdOk" title="Übernehmen">↵</button></div>
+    <span id="coords"></span>
+    <div id="toggles">
+      <button data-t="snap" title="Objektfang (F3)">FANG</button>
+      <button data-t="grid" title="Rasterfang (F7)">RASTER</button>
+      <button data-t="ortho" title="Ortho (F8)">ORTHO</button>
+      <button data-t="polar" title="Polar 15° (F10)">POLAR</button>
+      <button id="btnSnapCfg" title="Fang-Einstellungen">⚙</button>
+    </div>
+  </footer>
+</div>
+<div id="menu" hidden></div>
+<div id="modal" hidden><div class="dlg"><h3></h3><div class="body"></div><div class="btns"></div></div></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
