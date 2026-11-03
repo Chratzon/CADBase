@@ -1,8 +1,8 @@
 // Service Worker: alle Dateien offline verfügbar (Netz zuerst, Cache als Rückfall)
-const CACHE = 'cadbase-v4';
+const CACHE = 'cadbase-v5';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/main.js', 'js/model.js', 'js/geom.js', 'js/hatch.js', 'js/render.js', 'js/print.js', 'js/export.js', 'js/view3d.js', 'js/tools.js', 'js/gen.js',
+  'js/main.js', 'js/model.js', 'js/geom.js', 'js/hatch.js', 'js/render.js', 'js/print.js', 'js/export.js', 'js/view3d.js', 'js/tools.js', 'js/gen.js', 'js/drywall.js', 'js/drywall-ui.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });

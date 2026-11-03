@@ -2,6 +2,7 @@
 import * as G from './geom.js';
 import { styleOf, dimGeom, fmtDim, state } from './model.js';
 import { genHatch } from './hatch.js';
+import { wallParts, wallLabel } from './drywall.js'; // Trockenbau
 
 export const FONT = 'Arial, "Helvetica Neue", Helvetica, sans-serif';
 const mctx = document.createElement('canvas').getContext('2d');
@@ -133,6 +134,11 @@ export function emit(e, B, sc) {
     case 'dim': emitDim(e, B, sc, st); break;
     case 'leader': emitLeader(e, B, sc, st); break;
     case 'text': emitText(e, B, sc, st); break;
+    case 'wall': { // Trockenbau
+      for (const s of wallParts(e)) emit(s, B, sc);
+      if (e.label !== false) { const l = wallLabel(e, sc); B.text(l.p, l.text, 2.5 * sc, l.ang, 'c', 'b', st.color); }
+      break;
+    }
   }
 }
 

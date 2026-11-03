@@ -1,5 +1,6 @@
 // Dokumentmodell, Layer, Elemente, Undo, Speicherung
 import * as G from './geom.js';
+import { wallOutline } from './drywall.js'; // Trockenbau
 
 export const LTYPES = {
   solid:   { label: 'Volllinie', dash: [] },
@@ -137,6 +138,7 @@ export function entSegs(e, fine = false) {
       for (const r of [e.pts, ...(e.holes || [])]) for (let i = 0; i < r.length; i++) s.push([r[i], r[(i + 1) % r.length]]);
       return s;
     }
+    case 'wall': { const r = wallOutline(e); return r.map((p, i) => [p, r[(i + 1) % r.length]]); } // Trockenbau
     case 'circle': { const p = G.arcPts(e.c, e.r, 0, G.TAU, 96); return p.slice(1).map((q, i) => [p[i], q]); }
     case 'arc': { const p = G.arcPts(e.c, e.r, e.a0, e.a1); return p.slice(1).map((q, i) => [p[i], q]); }
     default: return [];
@@ -152,6 +154,7 @@ export function entPts(e) {
     case 'dim': { const g = dimGeom(e); return [e.a, e.b, g.fa, g.fb]; }
     case 'leader': return e.pts;
     case 'text': return [e.p];
+    case 'wall': return wallOutline(e); // Trockenbau
     default: return [];
   }
 }
@@ -165,6 +168,7 @@ export function entBBox(e, sc = 1) {
     const tb = { x0: p.x - w, y0: p.y - h * lines.length * 1.5, x1: p.x + w, y1: p.y + h * lines.length * 1.6 };
     return G.bboxUnion(b, tb);
   }
+  if (e.type === 'wall') return { x0: b.x0 - 8 * sc, y0: b.y0 - 8 * sc, x1: b.x1 + 8 * sc, y1: b.y1 + 8 * sc }; // Trockenbau
   if (e.type === 'dim') { const t = (state.doc.settings.dimText + 2) * sc; return { x0: b.x0 - t, y0: b.y0 - t, x1: b.x1 + t, y1: b.y1 + t }; }
   return b;
 }
@@ -187,6 +191,7 @@ export function snapPts(e) {
     case 'dim': { const g = dimGeom(e); P(g.fa, 'end'); P(g.fb, 'end'); break; }
     case 'leader': for (const p of e.pts) P(p, 'end'); break;
     case 'text': P(e.p, 'end'); break;
+    case 'wall': P(e.a, 'end'); P(e.b, 'end'); P(G.mid(e.a, e.b), 'mid'); for (const p of wallOutline(e)) P(p, 'end'); break; // Trockenbau
   }
   return out;
 }
@@ -200,6 +205,7 @@ export function hitDist(e, p, sc = 1) {
       if (G.angInArc(a, e.a0, e.a1)) return Math.abs(G.dist(p, e.c) - e.r);
       return Math.min(G.dist(p, G.polar(e.c, e.r, e.a0)), G.dist(p, G.polar(e.c, e.r, e.a1)));
     }
+    case 'wall': { const r = wallOutline(e); if (G.pointInPoly(p, r)) return 0.0001; let d = Infinity; for (let i = 0; i < 4; i++) d = Math.min(d, G.distPointSeg(p, r[i], r[(i + 1) % 4]).d); return d; } // Trockenbau
     case 'hatch': {
       if (G.pointInRings(p, [e.pts, ...(e.holes || [])])) return 0.0001 + 1e-9;
       let d = Infinity; for (const [a, b] of entSegs(e, true)) d = Math.min(d, G.distPointSeg(p, a, b).d); return d;
@@ -246,6 +252,7 @@ export function transformEnt(e, T) {
       break;
     case 'leader': e.pts = mapArr(e.pts); break;
     case 'text': e.p = f(e.p); if (T.rot) e.angle = ((e.angle || 0) + G.deg(T.rot)) % 360; break;
+    case 'wall': e.a = f(e.a); e.b = f(e.b); if (T.mirror) e.flip = !e.flip; break; // Trockenbau
   }
   return e;
 }

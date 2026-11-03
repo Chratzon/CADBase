@@ -499,4 +499,4 @@ export class PlaceTool extends Tool {
   preview(B, sc) { if (this.cur) for (const e of this.placed(this.cur)) emit(e, B, sc); }
 }
 
-export { hitDist };
+export { hitDist, Tool }; // Tool: Trockenbau-Modul

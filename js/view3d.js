@@ -2,6 +2,7 @@
 import { state, layerById, entSegs, nid } from './model.js';
 import { PATTERNS } from './hatch.js';
 import * as G from './geom.js';
+import { wallParts3D } from './drywall.js'; // Trockenbau
 
 function hex2rgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
 function rgb2hex(r, g, b) { return '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join(''); }
@@ -25,7 +26,13 @@ export class View3D {
     const d = state.doc; const def = +d.settings.ext3d || 300;
     this.prisms = []; this.lines = [];
     let bb = null;
-    for (const e of d.ents) {
+    const list = [];
+    for (const e of d.ents) { // Trockenbau: Wände in Platten/Dämmung zerlegen, Höhe = Wandhöhe
+      if (e.type !== 'wall') { list.push(e); continue; }
+      if (!layerById(e.layer).vis || e.no3d) continue;
+      for (const s of wallParts3D(e)) list.push(s);
+    }
+    for (const e of list) {
       const L = layerById(e.layer); if (!L.vis) continue;
       if (['dim', 'text', 'leader'].includes(e.type)) continue;
       // eingefügte Isometrien und ausgeblendete Objekte nicht erneut in 3D zeigen
