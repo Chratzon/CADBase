@@ -793,6 +793,7 @@ function refreshProps() {
     h += num('tofs', 'Text verschieben (mm)', common('tofs'));
     if (ents.length === 1) h += `<div class="pinfo">Messwert ${fmtNum(dimGeom(e0).val, 2)} mm</div>`;
   }
+  if (!ents.every((e) => e.iso) && types.some((t) => !['dim', 'text', 'leader'].includes(t))) h += row('In 3D ausblenden', `<input type="checkbox" data-k="no3d" ${common('no3d') ? 'checked' : ''}>`);
   h += `<div class="pbtns"><button data-act="front">Nach vorne</button><button data-act="back">Nach hinten</button><button data-act="del" class="danger">Löschen</button></div>`;
   el.innerHTML = h;
 }
@@ -811,6 +812,7 @@ $('#tab-props').addEventListener('change', (ev) => {
     }
     if (k === 'angle' && e.type === 'hatch') { const s = String(v).trim().toLowerCase(); e.angle = (s === '' || s === 'auto') ? 'auto' : parseFloat(s.replace(',', '.')) || 0; continue; }
     if (v === '' && t.type !== 'checkbox') { delete e[k]; continue; }
+    if (k === 'no3d' && !v) { delete e.no3d; continue; }
     if (t.dataset.num || ['r', 'scale', 'ext', 'z0', 'angle', 'tofs', 'h'].includes(k)) { const n = parseFloat(String(v).replace(',', '.')); if (!isNaN(n)) e[k] = n; }
     else e[k] = v;
   }

@@ -28,6 +28,8 @@ export class View3D {
     for (const e of d.ents) {
       const L = layerById(e.layer); if (!L.vis) continue;
       if (['dim', 'text', 'leader'].includes(e.type)) continue;
+      // eingefügte Isometrien und ausgeblendete Objekte nicht erneut in 3D zeigen
+      if (e.no3d || e.iso || L.name === '3D-Ansicht') continue;
       const z0 = +e.z0 || 0;
       let rings = null, color = null, h = 0;
       if (e.type === 'hatch') {
@@ -118,10 +120,10 @@ export class View3D {
   toEntities(origin, layerId) {
     const ents = [];
     const T = (q) => ({ x: origin.x + q.x, y: origin.y + q.y });
-    for (const [a, b] of this.lines) ents.push({ id: nid(), type: 'line', layer: layerId, a: T(this.P(a)), b: T(this.P(b)) });
+    for (const [a, b] of this.lines) ents.push({ id: nid(), type: 'line', layer: layerId, a: T(this.P(a)), b: T(this.P(b)), iso: true });
     for (const f of this.faces()) {
       const rings = f.pr.map((r) => r.map(T));
-      ents.push({ id: nid(), type: 'hatch', layer: layerId, pts: rings[0], holes: rings.slice(1), pattern: 'fuellung', fillColor: f.col, outline: true, olw: 0.25, ext: 0 });
+      ents.push({ id: nid(), type: 'hatch', layer: layerId, pts: rings[0], holes: rings.slice(1), pattern: 'fuellung', fillColor: f.col, outline: true, olw: 0.25, ext: 0, iso: true });
     }
     return ents;
   }
