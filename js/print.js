@@ -62,7 +62,7 @@ export function buildSVG(opts = {}) {
     const [a, b] = FORMATS[opts.fit]; [ow, oh] = sh.orient === 'quer' ? [b, a] : [a, b];
     note = `<text x="${F.x0}" y="${H - 1.5}" font-family="Arial" font-size="2.4" fill="#000">Ausdruck auf ${opts.fit} verkleinert – nicht maßstäblich (Original ${sh.fmt}, 1:${sh.sc})</text>`;
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ow}mm" height="${oh}mm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">` +
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" style="fill:none;stroke:none" width="${ow}mm" height="${oh}mm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">` +
     `<rect width="${W}" height="${H}" fill="#fff"/>` +
     `<defs><clipPath id="cbclip"><rect x="${F.x0}" y="${F.y0}" width="${F.x1 - F.x0}" height="${F.y1 - F.y0}"/></clipPath></defs>` +
     `<g clip-path="url(#cbclip)">${B.out.join('')}</g>${B2.out.join('')}${note}</svg>`;

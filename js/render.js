@@ -110,7 +110,7 @@ export class SvgB {
     const p = this.T(pt); const hp = h / this.sc;
     const anchor = align === 'c' ? 'middle' : align === 'r' ? 'end' : 'start';
     const dy = valign === 'm' ? hp / 2 : valign === 't' ? hp : 0;
-    this.out.push(`<text x="0" y="${f2(dy)}" transform="translate(${f2(p.x)} ${f2(p.y)}) rotate(${f2(-(angDeg || 0))})" font-family="Arial, Helvetica, sans-serif" font-size="${f2(hp * 1.4)}"${bold ? ' font-weight="bold"' : ''} text-anchor="${anchor}" fill="${this.col(color)}" xml:space="preserve">${esc(str)}</text>`);
+    this.out.push(`<text x="0" y="${f2(dy)}" transform="translate(${f2(p.x)} ${f2(p.y)}) rotate(${f2(-(angDeg || 0))})" font-family="Arial, Helvetica, sans-serif" font-size="${f2(hp * 1.4)}"${bold ? ' font-weight="bold"' : ''} text-anchor="${anchor}" fill="${this.col(color)}" stroke="none" xml:space="preserve">${esc(str)}</text>`);
   }
 }
 
@@ -179,11 +179,20 @@ export function emitDim(e, B, sc, st) {
   let pos = G.add(G.mid(g.fa, g.fb), G.mul(up, 0.9 * k));
   const tw = textWidth(txt, h), L = G.dist(g.fa, g.fb);
   if (e.tofs) pos = G.add(pos, G.mul(r, e.tofs));
-  else if (tw + 1.2 * k > L) {
-    // zu klein: Text hinter das Maßende (in Leserichtung) setzen
-    const far = G.dot(G.sub(g.fb, g.fa), r) >= 0 ? g.fb : g.fa;
-    pos = G.add(G.add(far, G.mul(up, 0.9 * k)), G.mul(r, tw / 2 + 2.6 * k));
-    B.stroke([far, G.add(far, G.mul(r, 1.8 * k))], false, thin);
+  else if (tw + 0.4 * k > L) {
+    // zu klein: Text neben das Maß setzen – auf die Seite ohne Nachbarmaß
+    const ends = G.dot(G.sub(g.fb, g.fa), r) >= 0 ? [g.fb, g.fa] : [g.fa, g.fb];
+    const busy = (q) => state.doc.ents.some((o) => o !== e && o.type === 'dim' && o.id !== e.id && (() => { const og = dimGeom(o); return G.dist(og.fa, q) < 0.01 * k || G.dist(og.fb, q) < 0.01 * k; })());
+    const b0 = busy(ends[0]), b1 = busy(ends[1]);
+    if (b0 && b1) {
+      // beidseitig Nachbarn: Text auf die andere Seite der Maßlinie
+      pos = G.sub(G.mid(g.fa, g.fb), G.mul(up, 0.9 * k + h));
+    } else {
+      const far = b0 ? ends[1] : ends[0];
+      const rr = G.mul(r, far === ends[0] ? 1 : -1);
+      pos = G.add(G.add(far, G.mul(up, 0.9 * k)), G.mul(rr, tw / 2 + 2.6 * k));
+      B.stroke([far, G.add(far, G.mul(rr, 1.8 * k))], false, thin);
+    }
   }
   B.text(pos, txt, h, G.deg(a), 'c', 'b', st.color);
 }

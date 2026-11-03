@@ -1,5 +1,5 @@
 // Service Worker: alle Dateien offline verfügbar (Netz zuerst, Cache als Rückfall)
-const CACHE = 'cadbase-v1';
+const CACHE = 'cadbase-v2';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'js/main.js', 'js/model.js', 'js/geom.js', 'js/hatch.js', 'js/render.js', 'js/print.js', 'js/export.js', 'js/view3d.js', 'js/tools.js', 'js/gen.js',

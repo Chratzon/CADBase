@@ -89,8 +89,10 @@ export function schichten(o, Lf) {
     });
   }
   if (o.mass) {
+    const kept = [bounds[0]];
+    for (let i = 1; i < bounds.length; i++) { if (Math.abs(bounds[i] - kept[kept.length - 1]) >= 1) kept.push(bounds[i]); else if (i === bounds.length - 1) kept[kept.length - 1] = bounds[i]; }
+    bounds.length = 0; bounds.push(...kept);
     for (let i = 0; i < bounds.length - 1; i++) {
-      if (Math.abs(bounds[i + 1] - bounds[i]) < 1) continue;
       if (o.dir === 'h') out.push({ id: nid(), type: 'dim', a: { x: 0, y: bounds[i] }, b: { x: 0, y: bounds[i + 1] }, p: { x: -8 * sc, y: 0 }, mode: 'v', layer: Lf('L3') });
       else out.push({ id: nid(), type: 'dim', a: { x: bounds[i], y: 0 }, b: { x: bounds[i + 1], y: 0 }, p: { x: 0, y: -8 * sc }, mode: 'h', layer: Lf('L3') });
     }
