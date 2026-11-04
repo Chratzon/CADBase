@@ -78,8 +78,8 @@ export function emitSheet(B, sh) {
 export function buildSVG(opts = {}) {
   const d = state.doc, sh = d.sheet;
   const M = sheetMaps(sh); const F = frameRect(sh);
-  const B = new SvgB(M.toPaper, sh.sc, { mono: opts.mono });
-  for (const e of d.ents) { const L = layerById(e.layer); if (!L.vis || L.print === false) continue; emit(e, B, sh.sc); }
+  const B = new SvgB(M.toPaper, sh.sc, { mono: opts.mono, imgData: opts.imgData });
+  for (const pass of [0, 1]) for (const e of d.ents) { if ((e.type === 'image') !== (pass === 0)) continue; const L = layerById(e.layer); if (!L.vis || L.print === false) continue; emit(e, B, sh.sc); }
   const B2 = new SvgB(M.toPaper, sh.sc, { mono: opts.mono });
   emitSheet(B2, sh);
   const W = M.H !== undefined ? M.W : 0, H = M.H;

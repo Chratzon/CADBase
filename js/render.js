@@ -4,6 +4,10 @@ import { styleOf, dimGeom, fmtDim, state } from './model.js';
 import { genHatch } from './hatch.js';
 import { wallParts, wallLabel } from './drywall.js'; // Trockenbau
 
+// Bildquelle für Unterlagen (wird von main.js gesetzt)
+let imgProvider = () => null;
+export function setImageProvider(f) { imgProvider = f; }
+
 export const FONT = 'Arial, "Helvetica Neue", Helvetica, sans-serif';
 const mctx = document.createElement('canvas').getContext('2d');
 mctx.font = `100px ${FONT}`;
@@ -63,6 +67,15 @@ export class CanvasB {
   }
   disc(cen, r, color) { const c = this.ctx; c.fillStyle = this.col(color); const p = this.T(cen); c.beginPath(); c.arc(p.x, p.y, r * this.vw.z, 0, G.TAU); c.fill(); }
   tri(pts, color) { const c = this.ctx; c.fillStyle = this.col(color); c.beginPath(); pts.forEach((q, i) => { const p = this.T(q); i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y); }); c.closePath(); c.fill(); }
+  image(e) {
+    const c = this.ctx; const p = this.T(e.p); const W = e.w * this.vw.z, H = e.h * this.vw.z;
+    c.save(); c.translate(p.x, p.y); c.rotate(-G.rad(e.rot || 0));
+    const im = imgProvider(e.img);
+    if (this.o.color) { c.strokeStyle = this.o.color; c.lineWidth = 1.5; c.setLineDash([6, 4]); c.strokeRect(0, -H, W, H); c.setLineDash([]); }
+    else if (im && im.state === 'ok') { c.globalAlpha = e.op ?? 0.6; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(im.img, 0, -H, W, H); c.globalAlpha = 1; }
+    else { c.fillStyle = 'rgba(120,130,140,0.12)'; c.fillRect(0, -H, W, H); c.strokeStyle = '#8a96a3'; c.lineWidth = 1; c.strokeRect(0, -H, W, H); c.fillStyle = '#5b6470'; c.font = '13px system-ui, sans-serif'; c.fillText(im && im.state === 'missing' ? 'Planbild in diesem Browser nicht vorhanden' : 'Plan wird geladen …', 10, -H + 20); }
+    c.restore();
+  }
   text(pt, str, h, angDeg, align, valign, color, bold) {
     const px = h * this.vw.z * 1.4;
     if (px < 2) return;
@@ -105,6 +118,11 @@ export class SvgB {
     const r = f2(Math.max(0.08, rPaper));
     this.out.push(`<g fill="${this.col(color)}">` + pts.map((q) => { const p = this.T(q); return `<circle cx="${f2(p.x)}" cy="${f2(p.y)}" r="${r}"/>`; }).join('') + '</g>');
   }
+  image(e) {
+    const url = this.o.imgData && this.o.imgData[e.img]; if (!url) return;
+    const p = this.T(e.p); const W = e.w / this.sc, H = e.h / this.sc;
+    this.out.push(`<g transform="translate(${f2(p.x)} ${f2(p.y)}) rotate(${f2(-(e.rot || 0))})"><image href="${url}" x="0" y="${f2(-H)}" width="${f2(W)}" height="${f2(H)}" opacity="${e.op ?? 0.6}" preserveAspectRatio="none"/></g>`);
+  }
   disc(c, r, color) { const p = this.T(c); this.out.push(`<circle cx="${f2(p.x)}" cy="${f2(p.y)}" r="${f2(r / this.sc)}" fill="${this.col(color)}"/>`); }
   tri(pts, color) { this.out.push(`<path d="${this.path(pts, true)}" fill="${this.col(color)}"/>`); }
   text(pt, str, h, angDeg, align, valign, color, bold) {
@@ -134,6 +152,7 @@ export function emit(e, B, sc) {
     case 'dim': emitDim(e, B, sc, st); break;
     case 'leader': emitLeader(e, B, sc, st); break;
     case 'text': emitText(e, B, sc, st); break;
+    case 'image': if (B.image) B.image(e); break;
     case 'wall': { // Trockenbau
       for (const s of wallParts(e)) emit(s, B, sc);
       if (e.label !== false) { const l = wallLabel(e, sc); B.text(l.p, l.text, 2.5 * sc, l.ang, 'c', 'b', st.color); }

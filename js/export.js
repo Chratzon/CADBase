@@ -2,6 +2,7 @@
 import { state, layerById, LTYPES } from './model.js';
 import { emit } from './render.js';
 import { buildSVG } from './print.js';
+import { imageDataMap, embedImages } from './underlay.js';
 import * as G from './geom.js';
 
 export function download(name, data, mime) {
@@ -13,8 +14,8 @@ export function download(name, data, mime) {
 }
 const safe = (s) => (s || 'zeichnung').replace(/[^\wäöüÄÖÜß\- ]+/g, '').trim().replace(/\s+/g, '_') || 'zeichnung';
 
-export function exportSVG(mono) { download(safe(state.doc.name) + '.svg', buildSVG({ mono }).svg, 'image/svg+xml'); }
-export function exportJSON() { download(safe(state.doc.name) + '.cadbase.json', JSON.stringify(state.doc, null, 1), 'application/json'); }
+export async function exportSVG(mono) { const imgData = await imageDataMap(state.doc.ents); download(safe(state.doc.name) + '.svg', buildSVG({ mono, imgData }).svg, 'image/svg+xml'); }
+export async function exportJSON() { const d = await embedImages(state.doc); download(safe(state.doc.name) + '.cadbase.json', JSON.stringify(d, null, 1), 'application/json'); }
 
 const ACI = [[1, 255, 0, 0], [2, 255, 255, 0], [3, 0, 255, 0], [4, 0, 255, 255], [5, 0, 0, 255], [6, 255, 0, 255], [8, 128, 128, 128], [9, 192, 192, 192], [30, 255, 127, 0], [7, 0, 0, 0]];
 function aci(hex) {

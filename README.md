@@ -30,6 +30,14 @@ Systeme nach Knauf-Detailblättern:
 Massenermittlung (CSV oder Tabelle in der Zeichnung), Wandansicht mit Plattenteilung, 3D. Ein/Aus im Datei-Menü.
 Werte vor Bestellung mit dem aktuellen Detailblatt prüfen.
 
+## PDF-Pläne als Unterlage (Aufmaß)
+
+**Datei → PDF-Plan / Bild als Unterlage** (oder Datei ins Zeichenfenster ziehen): Seite wählen, Planmaßstab angeben,
+einfügen. Mit **Plan kalibrieren** zwei Punkte eines bekannten Maßes antippen und das echte Maß eingeben – optional
+wird der Plan dabei exakt waagerecht/senkrecht ausgerichtet. Danach Wände usw. direkt auf dem Plan nachzeichnen.
+Die Unterlage liegt auf dem Layer „Unterlage" (sperrbar, Deckkraft einstellbar), wird mitgedruckt und beim
+Speichern als Datei eingebettet. PDF-Darstellung mit [pdf.js](https://mozilla.github.io/pdf.js/) (Apache-2.0), lokal in `js/vendor/pdfjs`.
+
 ## Prinzip
 
 Gezeichnet wird in Naturmaß (mm). Der Maßstab gehört zum Blatt: Schrift-, Maß- und Schraffurgrößen sind in Papier-mm angegeben und passen sich automatisch an.

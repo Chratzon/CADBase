@@ -108,6 +108,11 @@ export function fixDoc(d) {
 }
 
 // ---------- Element-Geometrie ----------
+// Unterlage (PDF/Bild): Ecken des gedrehten Rechtecks
+export function imgCorners(e) {
+  const a = G.rad(e.rot || 0), c = Math.cos(a), s = Math.sin(a);
+  return [[0, 0], [e.w, 0], [e.w, e.h], [0, e.h]].map(([x, y]) => ({ x: e.p.x + x * c - y * s, y: e.p.y + x * s + y * c }));
+}
 export function dimGeom(e) {
   let u;
   if (e.mode === 'h') u = { x: 1, y: 0 };
@@ -155,6 +160,7 @@ export function entPts(e) {
     case 'leader': return e.pts;
     case 'text': return [e.p];
     case 'wall': return wallOutline(e); // Trockenbau
+    case 'image': return imgCorners(e);
     default: return [];
   }
 }
@@ -191,6 +197,7 @@ export function snapPts(e) {
     case 'dim': { const g = dimGeom(e); P(g.fa, 'end'); P(g.fb, 'end'); break; }
     case 'leader': for (const p of e.pts) P(p, 'end'); break;
     case 'text': P(e.p, 'end'); break;
+    case 'image': for (const p of imgCorners(e)) P(p, 'end'); break;
     case 'wall': P(e.a, 'end'); P(e.b, 'end'); P(G.mid(e.a, e.b), 'mid'); for (const p of wallOutline(e)) P(p, 'end'); break; // Trockenbau
   }
   return out;
@@ -205,6 +212,7 @@ export function hitDist(e, p, sc = 1) {
       if (G.angInArc(a, e.a0, e.a1)) return Math.abs(G.dist(p, e.c) - e.r);
       return Math.min(G.dist(p, G.polar(e.c, e.r, e.a0)), G.dist(p, G.polar(e.c, e.r, e.a1)));
     }
+    case 'image': { const r = imgCorners(e); if (G.pointInPoly(p, r)) return 0.0001; let d = Infinity; for (let i = 0; i < 4; i++) d = Math.min(d, G.distPointSeg(p, r[i], r[(i + 1) % 4]).d); return d; }
     case 'wall': { const r = wallOutline(e); if (G.pointInPoly(p, r)) return 0.0001; let d = Infinity; for (let i = 0; i < 4; i++) d = Math.min(d, G.distPointSeg(p, r[i], r[(i + 1) % 4]).d); return d; } // Trockenbau
     case 'hatch': {
       if (G.pointInRings(p, [e.pts, ...(e.holes || [])])) return 0.0001 + 1e-9;
@@ -253,6 +261,7 @@ export function transformEnt(e, T) {
     case 'leader': e.pts = mapArr(e.pts); break;
     case 'text': e.p = f(e.p); if (T.rot) e.angle = ((e.angle || 0) + G.deg(T.rot)) % 360; break;
     case 'wall': e.a = f(e.a); e.b = f(e.b); if (T.mirror) e.flip = !e.flip; break; // Trockenbau
+    case 'image': if (T.mirror) break; e.p = f(e.p); if (T.rot) e.rot = ((e.rot || 0) + G.deg(T.rot)) % 360; if (T.s) { e.w *= T.s; e.h *= T.s; } break;
   }
   return e;
 }
@@ -264,11 +273,12 @@ export const Tscale = (c, s) => ({ f: (p) => ({ x: c.x + (p.x - c.x) * s, y: c.y
 
 export function cloneEnt(e) { const c = JSON.parse(JSON.stringify(e)); c.id = nid(); return c; }
 
-export function docBBox(onlyVisible = true) {
+export function docBBox(onlyVisible = true, skipImages = false) {
   let b = null;
   const sc = state.doc.sheet.sc;
   for (const e of state.doc.ents) {
     if (onlyVisible && !layerById(e.layer).vis) continue;
+    if (skipImages && e.type === 'image') continue;
     b = G.bboxUnion(b, entBBox(e, sc));
   }
   return b;

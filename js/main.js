@@ -2,7 +2,8 @@
 import * as G from './geom.js';
 import * as M from './model.js';
 import { state, layerById, entBBox, snapPts, entSegs, hitDist, dimGeom, transformEnt, Tmove, cloneEnt, nid, fmtNum } from './model.js';
-import { CanvasB, emit } from './render.js';
+import { CanvasB, emit, setImageProvider } from './render.js';
+import * as UL from './underlay.js'; // PDF-/Bild-Unterlagen
 import { PATTERNS } from './hatch.js';
 import { emitSheet, sheetMaps, paperSize, printSheet } from './print.js';
 import { exportSVG, exportDXF, exportJSON } from './export.js';
@@ -141,7 +142,8 @@ function draw() {
 
   const B = new CanvasB(ctx, view, { sc, lwReal: tg.lwReal });
   const vb = (() => { const a = toModel({ x: 0, y: view.h }), b = toModel({ x: view.w, y: 0 }); return { x0: a.x, y0: a.y, x1: b.x, y1: b.y }; })();
-  for (const e of d.ents) {
+  for (const pass of [0, 1]) for (const e of d.ents) {
+    if ((e.type === 'image') !== (pass === 0)) continue; // Unterlagen zuerst
     const L = layerById(e.layer); if (!L.vis) continue;
     if (!G.bboxOverlap(entBBox(e, sc), vb)) continue;
     if (drag && drag.type === 'move' && sel.has(e.id)) continue;
@@ -276,6 +278,7 @@ function pick(p, filter) {
     if (!G.bboxHit(entBBox(e, sc), p, tol)) continue;
     let d = hitDist(e, p, sc);
     if ((e.type === 'hatch' || e.type === 'wall') && d < 0.001) d = tol * 0.85;
+    if (e.type === 'image' && d < 0.001) d = tol * 0.97;
     if ((e.type === 'text' || e.type === 'leader') && d === 0) d = tol * 0.5;
     if (d < tol && d < bd) { bd = d; best = e; }
   }
@@ -296,6 +299,7 @@ function grips(e) {
     case 'dim': { const gg = dimGeom(e); A(e.a, (q) => { e.a = q; }); A(e.b, (q) => { e.b = q; }); A(G.mid(gg.fa, gg.fb), (q) => { e.p = q; }); break; }
     case 'leader': e.pts.forEach((p, i) => A(p, (q) => { e.pts[i] = q; })); break;
     case 'text': A(e.p, (q) => { e.p = q; }); break;
+    case 'image': A(e.p, (q) => { e.p = q; }); break;
     case 'wall': A(e.a, (q) => { DWUI.moveJoint(e, 'a', q); e.a = q; }, e.b); A(e.b, (q) => { DWUI.moveJoint(e, 'b', q); e.b = q; }, e.a); A(G.mid(e.a, e.b), (q) => { const m = G.mid(e.a, e.b); const d = G.sub(q, m); e.a = G.add(e.a, d); e.b = G.add(e.b, d); }); break; // Trockenbau
   }
   return g;
@@ -366,14 +370,16 @@ const TOOLS = {
   trim: { label: 'Stutzen', key: 'X', cls: T.TrimTool, icon: '<path d="M10 2v16M2 10h5" /><path d="M12 10h6" stroke-dasharray="1.5 2"/>' },
   extend: { label: 'Dehnen', key: 'E', cls: T.ExtendTool, icon: '<path d="M17 3v14M3 10h8"/><path d="M11 10h5M13.5 7.5L16 10l-2.5 2.5" stroke-dasharray="0"/>' },
   wall: { label: 'Wand (Trockenbau)', key: 'W', cls: DWUI.WallTool, icon: '<rect x="2.5" y="7" width="15" height="6"/><path d="M6 7v6M10 7v6M14 7v6" stroke-dasharray="1.5 1.5"/>' }, // Trockenbau
+  calib: { label: 'Plan kalibrieren', cls: UL.CalibTool, icon: '<path d="M3 15L15 3"/><circle cx="3.5" cy="14.5" r="1.6"/><circle cx="14.5" cy="3.5" r="1.6"/><path d="M11 16.5l2 2 4-5"/>' },
   measure: { label: 'Messen', key: 'I', cls: T.MeasureTool, icon: '<path d="M2.5 13.5l11-11 4 4-11 11z"/><path d="M6 10l1.5 1.5M8.5 7.5l1.5 1.5M11 5l1.5 1.5"/>' },
 };
 const CMDS = {
   explode: { label: 'Auflösen', icon: '<path d="M10 3v4M10 13v4M3 10h4M13 10h4M5 5l2.5 2.5M12.5 12.5L15 15M15 5l-2.5 2.5M7.5 12.5L5 15"/>', f: () => explodeSel() },
   dwmass: { label: 'Massen (Trockenbau)', icon: '<rect x="3" y="3" width="14" height="14" rx="1.5"/><path d="M6 7h8M6 10h8M6 13h5"/>', f: () => DWUI.massDialog(state.doc.ents.filter((e) => sel.has(e.id) && e.type === 'wall')) }, // Trockenbau
+  plan: { label: 'PDF-Plan einlesen', icon: '<path d="M5 2.5h7l3.5 3.5v11.5H5z"/><path d="M12 2.5V6h3.5"/><path d="M7.5 11h5M7.5 14h5"/>', f: () => $('#pdfIn').click() },
   del: { label: 'Löschen (Entf)', icon: '<path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11"/>', f: () => deleteSel() },
 };
-const GROUPS = [['select'], ['line', 'pline', 'rect', 'circle', 'arc'], ['hatch', 'dim', 'text', 'leader'], ['move', 'copy', 'rotate', 'mirror', 'offset', 'trim', 'extend', 'explode', 'del'], ...(FEAT_DW ? [['wall', 'dwmass']] : []), ['measure']]; // Trockenbau-Gruppe
+const GROUPS = [['select'], ['line', 'pline', 'rect', 'circle', 'arc'], ['hatch', 'dim', 'text', 'leader'], ['move', 'copy', 'rotate', 'mirror', 'offset', 'trim', 'extend', 'explode', 'del'], ...(FEAT_DW ? [['wall', 'dwmass']] : []), ['plan', 'calib'], ['measure']]; // Trockenbau-Gruppe
 
 function buildToolbar() {
   const nav = $('#tools'); nav.innerHTML = '';
@@ -738,7 +744,7 @@ function updateHeader() {
   document.title = state.doc.name + ' – CADBase';
 }
 
-const TYPE_DE = { wall: 'Trockenbauwand', line: 'Linie', pline: 'Polylinie', circle: 'Kreis', arc: 'Bogen', hatch: 'Schraffur', dim: 'Bemaßung', text: 'Text', leader: 'Beschriftung' };
+const TYPE_DE = { image: 'Plan-Unterlage', wall: 'Trockenbauwand', line: 'Linie', pline: 'Polylinie', circle: 'Kreis', arc: 'Bogen', hatch: 'Schraffur', dim: 'Bemaßung', text: 'Text', leader: 'Beschriftung' };
 function refreshProps() {
   const el = $('#tab-props'); const d = state.doc;
   const ents = d.ents.filter((e) => sel.has(e.id));
@@ -803,6 +809,7 @@ function refreshProps() {
     if (ents.length === 1) h += `<div class="pinfo">Messwert ${fmtNum(dimGeom(e0).val, 2)} mm</div>`;
   }
   if (one === 'wall') h += DWUI.propsHtml(ents, common, row); // Trockenbau
+  if (one === 'image') h += UL.propsHtml(ents, common, row);
   if (!ents.every((e) => e.iso) && types.some((t) => !['dim', 'text', 'leader'].includes(t))) h += row('In 3D ausblenden', `<input type="checkbox" data-k="no3d" ${common('no3d') ? 'checked' : ''}>`);
   h += `<div class="pbtns"><button data-act="front">Nach vorne</button><button data-act="back">Nach hinten</button><button data-act="del" class="danger">Löschen</button></div>`;
   el.innerHTML = h;
@@ -834,6 +841,7 @@ $('#tab-props').addEventListener('click', (ev) => {
   const a = b.dataset.act; const d = state.doc;
   if (a === 'del') return deleteSel();
   if (a.startsWith('dw')) return DWUI.propAction(a, d.ents.filter((e) => sel.has(e.id))); // Trockenbau
+  if (a.startsWith('ul')) return UL.propAction(a);
   const s = d.ents.filter((e) => sel.has(e.id)), r = d.ents.filter((e) => !sel.has(e.id));
   d.ents = a === 'front' ? r.concat(s) : s.concat(r);
   app.commit();
@@ -937,7 +945,7 @@ $('#tab-sheet').addEventListener('click', (ev) => {
   }
 });
 function centerSheet() {
-  const sh = state.doc.sheet; const b = M.docBBox(); if (!b) return;
+  const sh = state.doc.sheet; const b = M.docBBox(true, true) || M.docBBox(); if (!b) return;
   const [W, H] = paperSize(sh);
   // Zeichenfläche: Rahmen minus Schriftfeld -> Mitte etwas nach links/oben
   const cxp = (20 + (W - 5)) / 2, cyp = (5 + (H - 5 - 32)) / 2;
@@ -946,7 +954,7 @@ function centerSheet() {
   sh.show = true;
 }
 function autoScale() {
-  const sh = state.doc.sheet; const b = M.docBBox(); if (!b) return toast('Zeichnung ist leer');
+  const sh = state.doc.sheet; const b = M.docBBox(true, true) || M.docBBox(); if (!b) return toast('Zeichnung ist leer');
   const [W, H] = paperSize(sh);
   const aw = W - 30, ah = H - 50;
   const need = Math.max((b.x1 - b.x0) / aw, (b.y1 - b.y0) / ah);
@@ -955,11 +963,12 @@ function autoScale() {
   toast(`Maßstab 1:${sh.sc} gewählt`);
 }
 
-function openPrint() {
+async function openPrint() {
   const sh = state.doc.sheet;
   if (!sh.show) { sh.show = true; centerSheet(); app.commit(); }
   const pr = M.getPref('print', { mono: true, fit: 'same' });
-  printSheet({ mono: pr.mono, fit: pr.fit === 'same' ? null : pr.fit });
+  const imgData = await UL.imageDataMap(state.doc.ents.filter((e) => e.type === 'image' && layerById(e.layer).vis && layerById(e.layer).print !== false));
+  printSheet({ mono: pr.mono, fit: pr.fit === 'same' ? null : pr.fit, imgData });
 }
 
 // ---------- Aufbauten ----------
@@ -1086,6 +1095,7 @@ $('#btnFile').onclick = (e) => openMenu(e.currentTarget, [
   { t: 'Zeichnungen öffnen …', f: openDrawings },
   { t: 'Umbenennen …', f: renameDoc },
   '-',
+  { t: 'PDF-Plan / Bild als Unterlage …', f: () => $('#pdfIn').click() },
   { t: 'Datei laden (.json) …', f: () => $('#fileIn').click() },
   { t: 'Als Datei speichern (.json)', k: 'Strg+S', f: exportJSON },
   '-',
@@ -1100,7 +1110,7 @@ $('#btnFile').onclick = (e) => openMenu(e.currentTarget, [
 ]);
 $('#fileIn').addEventListener('change', async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  try { const d = M.fixDoc(JSON.parse(await f.text())); d.id = 'd' + Date.now().toString(36); loadDocument(d); toast('Datei geladen'); }
+  try { const d = M.fixDoc(await UL.restoreImages(JSON.parse(await f.text()))); d.id = 'd' + Date.now().toString(36); loadDocument(d); toast('Datei geladen'); }
   catch { toast('Datei konnte nicht gelesen werden'); }
   e.target.value = '';
 });
@@ -1212,6 +1222,11 @@ new ResizeObserver(resize).observe($('#stage'));
 
 // ---------- Start ----------
 DWUI.initDrywall({ app, dialog, setTool, toast, getPref: M.getPref, setPref: M.setPref }); // Trockenbau
+UL.initUnderlay({ app, dialog, setTool, toast, getPref: M.getPref, setPref: M.setPref, refreshPanels: () => refreshAll() });
+setImageProvider(UL.imageFor);
+$('#pdfIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) UL.importFile(f); });
+$('#stage').addEventListener('dragover', (e) => { e.preventDefault(); });
+$('#stage').addEventListener('drop', (e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (!f) return; if (/\.json$/i.test(f.name)) { const dt = new DataTransfer(); dt.items.add(f); $('#fileIn').files = dt.files; $('#fileIn').dispatchEvent(new Event('change')); } else UL.importFile(f); });
 function init() {
   const saved = M.loadCurrent();
   if (saved) state.doc = M.fixDoc(saved);
