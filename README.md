@@ -17,6 +17,19 @@ Läuft als PWA am Rechner, Tablet und Handy, auch offline.
 - **Export:** SVG, DXF (R12, für AutoCAD/BricsCAD & Co.), JSON zum Weiterbearbeiten
 - **3D:** Schraffuren werden extrudiert, frei drehbar, als Vektor-Isometrie in die Zeichnung übernehmbar
 
+## Trockenbau-Modul (Test)
+
+Werkzeug **Wand (Trockenbau)** (Taste W): Wände im Zug zeichnen, Ecken werden nach Knauf-Prinzip verschnitten
+(durchlaufende Wand endet an der Ständerebene, Außenbeplankung der anstoßenden Wand deckt die Ecke).
+Systeme nach Knauf-Detailblättern:
+
+- **W11 Metallständerwände:** W111, W112, W113 (Einfachständerwerk 1-/2-/3-lagig), W115 (Doppelständerwerk entkoppelt), W116 (Installationswand, verlascht)
+- **W61 Vorsatzschalen:** W623 (CD 60/27, Direktabhänger), W625/W626 (CW freistehend 1-/2-lagig), W627 (CW-Doppelprofil), W653 (Massivbauplatte)
+- **W62 Schachtwände:** W628A (freispannend), W628B (CW), W629 (CW-Doppelprofil), W630 (Riegelwerk), W635 (UW-Doppelprofil + eingestellte Platte)
+
+Massenermittlung (CSV oder Tabelle in der Zeichnung), Wandansicht mit Plattenteilung, 3D. Ein/Aus im Datei-Menü.
+Werte vor Bestellung mit dem aktuellen Detailblatt prüfen.
+
 ## Prinzip
 
 Gezeichnet wird in Naturmaß (mm). Der Maßstab gehört zum Blatt: Schrift-, Maß- und Schraffurgrößen sind in Papier-mm angegeben und passen sich automatisch an.

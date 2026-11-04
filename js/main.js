@@ -25,11 +25,11 @@ let cursor = null, snapInfo = null, pointerType = 'mouse', hoverEnt = null;
 let drag = null, boxRect = null;
 const opts = {
   hatch: { pattern: 'daemmung', scale: 1, angle: 'auto', outline: true, fillColor: '#d0d0d0' },
-  wall: { sys: 'W112', prof: 75, achs: 625, board: 'GKB', t: 12.5, h: 2750, ins: 60, just: 'M' }, // Trockenbau
+  wall: { sys: 'W112', prof: 75, achs: 625, board: 'GKB', t: 12.5, h: 2750, ins: 60, just: 'M', gap: 0, layers: 2 }, // Trockenbau
   dimMode: 'auto', offset: 12.5, mirrorKeep: true, rotCopy: false, textH: 3.5, arrow: 'arrow', rectHatch: 'none',
 };
 Object.assign(opts, M.getPref('opts', {}));
-opts.wall = Object.assign({ sys: 'W112', prof: 75, achs: 625, board: 'GKB', t: 12.5, h: 2750, ins: 60, just: 'M' }, opts.wall || {}); // Trockenbau
+opts.wall = Object.assign({ sys: 'W112', prof: 75, achs: 625, board: 'GKB', t: 12.5, h: 2750, ins: 60, just: 'M', gap: 0, layers: 2 }, opts.wall || {}); // Trockenbau
 const tg = Object.assign({ snap: true, grid: false, ortho: false, polar: true, lwReal: false, showGrid: true }, M.getPref('toggles', {}));
 const sk = Object.assign({ end: true, mid: true, cen: true, quad: true, int: true, perp: true, near: true }, M.getPref('snapKinds', {}));
 let clipboard = null;
@@ -296,7 +296,7 @@ function grips(e) {
     case 'dim': { const gg = dimGeom(e); A(e.a, (q) => { e.a = q; }); A(e.b, (q) => { e.b = q; }); A(G.mid(gg.fa, gg.fb), (q) => { e.p = q; }); break; }
     case 'leader': e.pts.forEach((p, i) => A(p, (q) => { e.pts[i] = q; })); break;
     case 'text': A(e.p, (q) => { e.p = q; }); break;
-    case 'wall': A(e.a, (q) => { e.a = q; }, e.b); A(e.b, (q) => { e.b = q; }, e.a); A(G.mid(e.a, e.b), (q) => { const m = G.mid(e.a, e.b); const d = G.sub(q, m); e.a = G.add(e.a, d); e.b = G.add(e.b, d); }); break; // Trockenbau
+    case 'wall': A(e.a, (q) => { DWUI.moveJoint(e, 'a', q); e.a = q; }, e.b); A(e.b, (q) => { DWUI.moveJoint(e, 'b', q); e.b = q; }, e.a); A(G.mid(e.a, e.b), (q) => { const m = G.mid(e.a, e.b); const d = G.sub(q, m); e.a = G.add(e.a, d); e.b = G.add(e.b, d); }); break; // Trockenbau
   }
   return g;
 }
@@ -716,7 +716,7 @@ $('#optbar').addEventListener('change', (e) => {
   const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
   const num = (x) => parseFloat(String(x).replace(',', '.'));
   if (k === 'layer') { state.doc.cur = v; M.autosave(); refreshLayers(); }
-  else if (k.startsWith('w.')) { DWUI.optbarChange(opts.wall, k.slice(2), v); if (tool) tool.update(); } // Trockenbau
+  else if (k.startsWith('w.')) { if (DWUI.optbarChange(opts.wall, k.slice(2), v) === 'rerender') renderOptbar(); if (tool) tool.update(); } // Trockenbau
   else if (k.startsWith('h.')) { const kk = k.slice(2); opts.hatch[kk] = kk === 'scale' ? (num(v) || 1) : v; if (kk === 'pattern') renderOptbar(); }
   else if (k.startsWith('s.')) { const kk = k.slice(2); state.doc.settings[kk] = ['dimDec', 'dimText'].includes(kk) ? num(v) : v; M.commit(); }
   else if (k === 'offset') { opts.offset = num(v) || opts.offset; if (tool) tool.update(); }
@@ -1232,4 +1232,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 }
 
 // für Tests
-window.__cad = { state, app, view, sel, setTool, zoomFit, M };
+window.__cad = { state, app, view, sel, setTool, zoomFit, M, get tool() { return tool; } };
