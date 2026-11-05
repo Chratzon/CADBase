@@ -115,27 +115,38 @@ function partnerAt(e, end) {
   if (Math.abs(G.cross(ue, uo)) < 0.05) return null; // nahezu parallel
   return { o, oEnd, role: j.role, C: p };
 }
-// Schnittlinien je Gruppe an einem Wandende: {A, core, B} -> {p, d} oder null
+// Schnittlinien je Band an einem Wandende – Beplankung verzahnt (Treppenmuster)
+// P = durchlaufende Wand, N = anstoßende Wand; Lagen k/j von der Ständerebene nach außen gezählt.
+//  Außenecke: P-Lage k läuft bis Außenfläche der N-Lage k-1 (k=0: bis N-Kern), N-Lage j bis Außenfläche der P-Lage j
+//  Innenecke: P-Lage k endet an Außenfläche der N-Lage k-1 (k=0: am N-Kern), N-Lage j endet an Außenfläche der P-Lage j
+//  P-Kern endet an der äußeren Kernfläche von N, N-Kern beginnt an der inneren Kernfläche von P
+function sideFaces(X, side) {
+  // Flächen einer Seite von der Kernfläche nach außen: [Kernfläche, Außenfläche Lage 0, Lage 1, …]
+  const bs = X.bands.filter((b) => b.kind === 'board' && b.grp === side).sort((a, b) => a.idx - b.idx);
+  const core = side === 'A' ? X.coreA : X.coreB;
+  return [core, ...bs.map((b) => (side === 'A' ? b.y0 : b.y1))];
+}
 function cutsAt(e, end) {
   const pj = partnerAt(e, end); if (!pj) return null;
-  const { o, oEnd, role, C } = pj;
+  const { o, oEnd, role } = pj;
   const Fe = frame(e), Fo = frame(o);
   const dirE = end === 'a' ? Fe.u : G.mul(Fe.u, -1);       // Richtung in den Wandkörper von e
   const dirO = oEnd === 'a' ? Fo.u : G.mul(Fo.u, -1);      // Richtung in den Wandkörper von o
   const concE = G.dot(Fe.n, dirO) > 0 ? 'B' : 'A';         // konkave Seite von e
   const concO = G.dot(Fo.n, dirE) > 0 ? 'B' : 'A';
+  const convE = concE === 'A' ? 'B' : 'A', convO = concO === 'A' ? 'B' : 'A';
   const Xo = xsec(o);
   const line = (y) => ({ p: Fo.W(0, y), d: Fo.u });
-  const oFace = { concave: concO === 'B' ? Xo.y1 : Xo.y0, convex: concO === 'B' ? Xo.y0 : Xo.y1, coreConvex: concO === 'B' ? Xo.coreA : Xo.coreB };
-  const convE = concE === 'A' ? 'B' : 'A';
-  if (role === 'through') {
-    const L1 = line(oFace.coreConvex);
-    return { A: L1, core: L1, B: L1, corner: { convE, convexBoarded: (convE === 'A' ? xsec(e).nA : xsec(e).nB) > 0 } };
-  }
-  const conc = line(oFace.concave), conv = line(oFace.convex);
-  const r = { A: conc, core: conc, B: conc };
-  r[convE] = conv;
-  return r;
+  const fConv = sideFaces(Xo, convO), fConc = sideFaces(Xo, concO);
+  const at = (faces, i) => faces[Math.max(0, Math.min(i, faces.length - 1))];
+  const through = role === 'through';
+  const byBand = (b) => {
+    if (b.grp === 'core') return line(through ? fConv[0] : fConc[0]);
+    const k = b.idx;
+    if (through) return line(b.grp === convE ? at(fConv, k) : at(fConc, k));
+    return line(b.grp === convE ? at(fConv, k + 1) : at(fConc, k + 1));
+  };
+  return { byBand, corner: through ? { convE, convexBoarded: (convE === 'A' ? xsec(e).nA : xsec(e).nB) > 0 } : null };
 }
 function lineParam(F, y, L) { // Schnitt der Bandlinie (y) mit Linie L -> x-Parameter
   const a = F.W(0, y), b = F.W(1000, y);
@@ -162,7 +173,7 @@ function layout(e) {
   const ext = 4000;
   for (const b of X.bands) {
     const ym = (b.y0 + b.y1) / 2;
-    b.cutA = ca ? ca[b.grp] : null; b.cutB = cb ? cb[b.grp] : null;
+    b.cutA = ca ? ca.byBand(b) : null; b.cutB = cb ? cb.byBand(b) : null;
     b.xs = b.cutA ? (lineParam(F, ym, b.cutA) ?? 0) : 0;
     b.xe = b.cutB ? (lineParam(F, ym, b.cutB) ?? F.L) : F.L;
     b.xa = b.cutA ? -ext : 0; b.xb = b.cutB ? F.L + ext : F.L;
