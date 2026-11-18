@@ -401,22 +401,24 @@ export function wallTakeoff(e, p = {}) {
   return q;
 }
 
+let ceilTakeoff = null; // Decken-Mengen (ceiling.js), per setCeilingTakeoff angebunden
+export function setCeilingTakeoff(f) { ceilTakeoff = f; }
 export function takeoffAll(walls, p = {}) {
-  const per = walls.map((w) => ({ w, q: wallTakeoff(w, p) }));
+  const per = walls.map((w) => ({ w, q: w.type === 'ceiling' && ceilTakeoff ? ceilTakeoff(w, p) : wallTakeoff(w, p) }));
   const map = new Map();
   for (const { q } of per) for (const it of q.items) { const m = map.get(it.key) || { ...it, qty: 0 }; m.qty += it.qty; map.set(it.key, m); }
   const z = 1 + (p.zuschlag ?? 5) / 100;
-  const ORDER = ['CW', 'UW', 'CD', 'UD', 'DAH', 'WP', 'LN', 'LASCHE', 'B-', 'TN', 'MW', 'DB', 'DUEB', 'TF', 'FDS', 'ESS', 'UNI'];
+  const ORDER = ['CW', 'UW', 'CD', 'UA', 'UD', 'GL', 'TL', 'DAH', 'ABH', 'KV', 'NV', 'LV', 'WP', 'LN', 'LASCHE', 'B-', 'TN', 'MW', 'DB', 'DUEB', 'DN', 'TF', 'FDS', 'ESS', 'UNI'];
   const rank = (k) => { const i = ORDER.findIndex((o) => k.startsWith(o)); return i < 0 ? 99 : i; };
   const rows = [...map.values()].sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key, 'de', { numeric: true }));
   for (const r of rows) {
-    if (r.unit === 'lfm' && ['UW', 'UD', 'WP'].some((k) => r.key.startsWith(k))) { r.lfm = r.qty; r.qty = Math.ceil(r.qty / (UW_STOCK / 1000) - 1e-9); r.unit = 'Stk'; r.label += ` – Lieferlänge ${UW_STOCK} mm`; r.note = `${fmtNum(r.lfm, 2)} lfm netto${r.note ? ', ' + r.note : ''}`; }
+    if (r.unit === 'lfm' && ['UW', 'UD', 'WP', 'CD', 'UA'].some((k) => r.key.startsWith(k))) { r.lfm = r.qty; r.qty = Math.ceil(r.qty / (UW_STOCK / 1000) - 1e-9); r.unit = 'Stk'; r.label += ` – Lieferlänge ${UW_STOCK} mm`; r.note = `${fmtNum(r.lfm, 2)} lfm netto${r.note ? ', ' + r.note : ''}`; }
     else if (['TN', 'LN', 'DB', 'TF', 'FD', 'UN', 'MW', 'ESS'].some((k) => r.key.startsWith(k))) {
       r.qty = r.qty * z;
       if (r.unit === 'Stk') r.qty = Math.ceil(r.qty / 50) * 50;
     }
   }
-  return { per, rows, area: per.reduce((s, x) => s + x.q.area, 0), zuschlag: p.zuschlag ?? 5 };
+  return { per, rows, area: per.filter((x) => x.w.type !== 'ceiling').reduce((s, x) => s + x.q.area, 0), areaC: per.filter((x) => x.w.type === 'ceiling').reduce((s, x) => s + x.q.area, 0), zuschlag: p.zuschlag ?? 5 };
 }
 export function fmtQty(r) { if (r.unit === 'Stk') return String(Math.ceil(r.qty - 1e-9)); return fmtNum(r.qty, r.unit === 'kg' ? 1 : 2); }
 
@@ -476,7 +478,7 @@ export function tableEnts(res, Lf) {
   const W = cw.reduce((a, b) => a + b, 0), Ht = rows.length * rh;
   const out = [];
   const ln = (a, b, lw) => out.push({ id: nid(), type: 'line', a, b, layer: Lf('L1'), lw });
-  out.push({ id: nid(), type: 'text', p: { x: 0, y: Ht + 4 * sc }, text: `Massenermittlung Trockenbau – ${fmtNum(res.area, 2)} m² Wandfläche, Zuschlag ${res.zuschlag} %`, h: 3.5, angle: 0, align: 'l', bold: true, layer: Lf('L4') });
+  out.push({ id: nid(), type: 'text', p: { x: 0, y: Ht + 4 * sc }, text: `Massenermittlung Trockenbau – ${res.area ? fmtNum(res.area, 2) + ' m² Wand' : ''}${res.area && res.areaC ? ', ' : ''}${res.areaC ? fmtNum(res.areaC, 2) + ' m² Decke' : ''}, Zuschlag ${res.zuschlag} %`, h: 3.5, angle: 0, align: 'l', bold: true, layer: Lf('L4') });
   for (let i = 0; i <= rows.length; i++) ln({ x: 0, y: Ht - i * rh }, { x: W, y: Ht - i * rh }, i <= 1 || i === rows.length ? 0.35 : 0.18);
   let x = 0; ln({ x: 0, y: 0 }, { x: 0, y: Ht }, 0.35);
   cw.forEach((w) => { x += w; ln({ x, y: 0 }, { x, y: Ht }, x === W ? 0.35 : 0.18); });

@@ -3,6 +3,7 @@ import * as G from './geom.js';
 import { styleOf, dimGeom, fmtDim, state } from './model.js';
 import { genHatch } from './hatch.js';
 import { wallParts, wallLabel } from './drywall.js'; // Trockenbau
+import { emitCeiling } from './ceiling.js'; // Trockenbau-Decke
 
 // Bildquelle für Unterlagen (wird von main.js gesetzt)
 let imgProvider = () => null;
@@ -153,6 +154,7 @@ export function emit(e, B, sc) {
     case 'leader': emitLeader(e, B, sc, st); break;
     case 'text': emitText(e, B, sc, st); break;
     case 'image': if (B.image) B.image(e); break;
+    case 'ceiling': emitCeiling(e, B, sc, st); break;
     case 'wall': { // Trockenbau
       for (const s of wallParts(e)) emit(s, B, sc);
       if (e.label !== false) { const l = wallLabel(e, sc); B.text(l.p, l.text, 2.5 * sc, l.ang, 'c', 'b', st.color); }

@@ -144,6 +144,7 @@ export function entSegs(e, fine = false) {
       return s;
     }
     case 'wall': { const r = wallOutline(e); return r.map((p, i) => [p, r[(i + 1) % r.length]]); } // Trockenbau
+    case 'ceiling': { const s = []; for (const r of [e.pts, ...(e.holes || [])]) for (let i = 0; i < r.length; i++) s.push([r[i], r[(i + 1) % r.length]]); return s; } // Trockenbau-Decke
     case 'circle': { const p = G.arcPts(e.c, e.r, 0, G.TAU, 96); return p.slice(1).map((q, i) => [p[i], q]); }
     case 'arc': { const p = G.arcPts(e.c, e.r, e.a0, e.a1); return p.slice(1).map((q, i) => [p[i], q]); }
     default: return [];
@@ -161,6 +162,7 @@ export function entPts(e) {
     case 'text': return [e.p];
     case 'wall': return wallOutline(e); // Trockenbau
     case 'image': return imgCorners(e);
+    case 'ceiling': return e.pts; // Trockenbau-Decke
     default: return [];
   }
 }
@@ -198,6 +200,7 @@ export function snapPts(e) {
     case 'leader': for (const p of e.pts) P(p, 'end'); break;
     case 'text': P(e.p, 'end'); break;
     case 'image': for (const p of imgCorners(e)) P(p, 'end'); break;
+    case 'ceiling': for (const p of e.pts) P(p, 'end'); for (let i = 0; i < e.pts.length; i++) P(G.mid(e.pts[i], e.pts[(i + 1) % e.pts.length]), 'mid'); break;
     case 'wall': P(e.a, 'end'); P(e.b, 'end'); P(G.mid(e.a, e.b), 'mid'); for (const p of wallOutline(e)) P(p, 'end'); break; // Trockenbau
   }
   return out;
@@ -212,6 +215,7 @@ export function hitDist(e, p, sc = 1) {
       if (G.angInArc(a, e.a0, e.a1)) return Math.abs(G.dist(p, e.c) - e.r);
       return Math.min(G.dist(p, G.polar(e.c, e.r, e.a0)), G.dist(p, G.polar(e.c, e.r, e.a1)));
     }
+    case 'ceiling': { if (G.pointInRings(p, [e.pts, ...(e.holes || [])])) return 0.0001; let d = Infinity; for (const [a, b] of entSegs(e)) d = Math.min(d, G.distPointSeg(p, a, b).d); return d; }
     case 'image': { const r = imgCorners(e); if (G.pointInPoly(p, r)) return 0.0001; let d = Infinity; for (let i = 0; i < 4; i++) d = Math.min(d, G.distPointSeg(p, r[i], r[(i + 1) % 4]).d); return d; }
     case 'wall': { const r = wallOutline(e); if (G.pointInPoly(p, r)) return 0.0001; let d = Infinity; for (let i = 0; i < 4; i++) d = Math.min(d, G.distPointSeg(p, r[i], r[(i + 1) % 4]).d); return d; } // Trockenbau
     case 'hatch': {
@@ -261,6 +265,7 @@ export function transformEnt(e, T) {
     case 'leader': e.pts = mapArr(e.pts); break;
     case 'text': e.p = f(e.p); if (T.rot) e.angle = ((e.angle || 0) + G.deg(T.rot)) % 360; break;
     case 'wall': e.a = f(e.a); e.b = f(e.b); if (T.mirror) e.flip = !e.flip; break; // Trockenbau
+    case 'ceiling': { const o = e.pts[0]; const th = G.rad(+e.dir || 0); const q0 = f(o), q1 = f({ x: o.x + Math.cos(th), y: o.y + Math.sin(th) }); e.dir = ((G.deg(G.ang(q0, q1)) % 180) + 180) % 180; e.pts = mapArr(e.pts); if (e.holes) e.holes = e.holes.map(mapArr); break; }
     case 'image': if (T.mirror) break; e.p = f(e.p); if (T.rot) e.rot = ((e.rot || 0) + G.deg(T.rot)) % 360; if (T.s) { e.w *= T.s; e.h *= T.s; } break;
   }
   return e;

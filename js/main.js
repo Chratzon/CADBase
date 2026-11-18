@@ -11,6 +11,8 @@ import { View3D } from './view3d.js';
 import * as T from './tools.js';
 import * as GEN from './gen.js';
 import * as DWUI from './drywall-ui.js'; // Trockenbau
+import * as CE from './ceiling.js'; // Trockenbau-Decken
+import { setCeilingTakeoff } from './drywall.js';
 const FEAT_DW = M.getPref('feat.drywall', true); // Trockenbau-Modul ein/aus
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -27,10 +29,12 @@ let drag = null, boxRect = null;
 const opts = {
   hatch: { pattern: 'daemmung', scale: 1, angle: 'auto', outline: true, fillColor: '#d0d0d0' },
   wall: { sys: 'W112', prof: 75, achs: 625, board: 'GKB', t: 12.5, h: 2750, ins: 60, just: 'M', gap: 0, layers: 2 }, // Trockenbau
+  ceil: { sys: 'D112', board: 'GKB', t: 12.5, layers: 2, b: 500, c: 1000, load: 0.30, dir: 'auto', prof: 100, hanger: 'direkt', z: 2750 },
   dimMode: 'auto', offset: 12.5, mirrorKeep: true, rotCopy: false, textH: 3.5, arrow: 'arrow', rectHatch: 'none',
 };
 Object.assign(opts, M.getPref('opts', {}));
 opts.wall = Object.assign({ sys: 'W112', prof: 75, achs: 625, board: 'GKB', t: 12.5, h: 2750, ins: 60, just: 'M', gap: 0, layers: 2 }, opts.wall || {}); // Trockenbau
+opts.ceil = Object.assign({ sys: 'D112', board: 'GKB', t: 12.5, layers: 2, b: 500, c: 1000, load: 0.30, dir: 'auto', prof: 100, hanger: 'direkt', z: 2750 }, opts.ceil || {});
 const tg = Object.assign({ snap: true, grid: false, ortho: false, polar: true, lwReal: false, showGrid: true }, M.getPref('toggles', {}));
 const sk = Object.assign({ end: true, mid: true, cen: true, quad: true, int: true, perp: true, near: true }, M.getPref('snapKinds', {}));
 let clipboard = null;
@@ -279,6 +283,7 @@ function pick(p, filter) {
     let d = hitDist(e, p, sc);
     if ((e.type === 'hatch' || e.type === 'wall') && d < 0.001) d = tol * 0.85;
     if (e.type === 'image' && d < 0.001) d = tol * 0.97;
+    if (e.type === 'ceiling' && d < 0.001) d = tol * 0.92;
     if ((e.type === 'text' || e.type === 'leader') && d === 0) d = tol * 0.5;
     if (d < tol && d < bd) { bd = d; best = e; }
   }
@@ -300,6 +305,7 @@ function grips(e) {
     case 'leader': e.pts.forEach((p, i) => A(p, (q) => { e.pts[i] = q; })); break;
     case 'text': A(e.p, (q) => { e.p = q; }); break;
     case 'image': A(e.p, (q) => { e.p = q; }); break;
+    case 'ceiling': e.pts.forEach((p, i) => A(p, (q) => { e.pts[i] = q; }, e.pts[i - 1] || e.pts[e.pts.length - 1])); break;
     case 'wall': A(e.a, (q) => { DWUI.moveJoint(e, 'a', q); e.a = q; }, e.b); A(e.b, (q) => { DWUI.moveJoint(e, 'b', q); e.b = q; }, e.a); A(G.mid(e.a, e.b), (q) => { const m = G.mid(e.a, e.b); const d = G.sub(q, m); e.a = G.add(e.a, d); e.b = G.add(e.b, d); }); break; // Trockenbau
   }
   return g;
@@ -370,16 +376,17 @@ const TOOLS = {
   trim: { label: 'Stutzen', key: 'X', cls: T.TrimTool, icon: '<path d="M10 2v16M2 10h5" /><path d="M12 10h6" stroke-dasharray="1.5 2"/>' },
   extend: { label: 'Dehnen', key: 'E', cls: T.ExtendTool, icon: '<path d="M17 3v14M3 10h8"/><path d="M11 10h5M13.5 7.5L16 10l-2.5 2.5" stroke-dasharray="0"/>' },
   wall: { label: 'Wand (Trockenbau)', key: 'W', cls: DWUI.WallTool, icon: '<rect x="2.5" y="7" width="15" height="6"/><path d="M6 7v6M10 7v6M14 7v6" stroke-dasharray="1.5 1.5"/>' }, // Trockenbau
+  ceil: { label: 'Decke (Trockenbau)', key: 'U', cls: CE.CeilingTool, icon: '<path d="M2.5 5.5h15"/><path d="M5 5.5v3M10 5.5v3M15 5.5v3"/><path d="M2.5 8.5h15" stroke-dasharray="2 1.5"/><rect x="2.5" y="11" width="15" height="3"/>' },
   calib: { label: 'Plan kalibrieren', cls: UL.CalibTool, icon: '<path d="M3 15L15 3"/><circle cx="3.5" cy="14.5" r="1.6"/><circle cx="14.5" cy="3.5" r="1.6"/><path d="M11 16.5l2 2 4-5"/>' },
   measure: { label: 'Messen', key: 'I', cls: T.MeasureTool, icon: '<path d="M2.5 13.5l11-11 4 4-11 11z"/><path d="M6 10l1.5 1.5M8.5 7.5l1.5 1.5M11 5l1.5 1.5"/>' },
 };
 const CMDS = {
   explode: { label: 'Auflösen', icon: '<path d="M10 3v4M10 13v4M3 10h4M13 10h4M5 5l2.5 2.5M12.5 12.5L15 15M15 5l-2.5 2.5M7.5 12.5L5 15"/>', f: () => explodeSel() },
-  dwmass: { label: 'Massen (Trockenbau)', icon: '<rect x="3" y="3" width="14" height="14" rx="1.5"/><path d="M6 7h8M6 10h8M6 13h5"/>', f: () => DWUI.massDialog(state.doc.ents.filter((e) => sel.has(e.id) && e.type === 'wall')) }, // Trockenbau
+  dwmass: { label: 'Massen (Trockenbau)', icon: '<rect x="3" y="3" width="14" height="14" rx="1.5"/><path d="M6 7h8M6 10h8M6 13h5"/>', f: () => DWUI.massDialog(state.doc.ents.filter((e) => sel.has(e.id) && (e.type === 'wall' || e.type === 'ceiling'))) }, // Trockenbau
   plan: { label: 'PDF-Plan einlesen', icon: '<path d="M5 2.5h7l3.5 3.5v11.5H5z"/><path d="M12 2.5V6h3.5"/><path d="M7.5 11h5M7.5 14h5"/>', f: () => $('#pdfIn').click() },
   del: { label: 'Löschen (Entf)', icon: '<path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11"/>', f: () => deleteSel() },
 };
-const GROUPS = [['select'], ['line', 'pline', 'rect', 'circle', 'arc'], ['hatch', 'dim', 'text', 'leader'], ['move', 'copy', 'rotate', 'mirror', 'offset', 'trim', 'extend', 'explode', 'del'], ...(FEAT_DW ? [['wall', 'dwmass']] : []), ['plan', 'calib'], ['measure']]; // Trockenbau-Gruppe
+const GROUPS = [['select'], ['line', 'pline', 'rect', 'circle', 'arc'], ['hatch', 'dim', 'text', 'leader'], ['move', 'copy', 'rotate', 'mirror', 'offset', 'trim', 'extend', 'explode', 'del'], ...(FEAT_DW ? [['wall', 'ceil', 'dwmass']] : []), ['plan', 'calib'], ['measure']]; // Trockenbau-Gruppe
 
 function buildToolbar() {
   const nav = $('#tools'); nav.innerHTML = '';
@@ -404,7 +411,7 @@ function setTool(name, ...args) {
     const d = TOOLS[name]; if (!d) return;
     toolName = name;
     if (name !== 'select') lastTool = name;
-    if (['line', 'pline', 'rect', 'circle', 'arc', 'hatch', 'dim', 'text', 'leader', 'measure', 'wall'].includes(name) && sel.size) { sel.clear(); refreshProps(); }
+    if (['line', 'pline', 'rect', 'circle', 'arc', 'hatch', 'dim', 'text', 'leader', 'measure', 'wall', 'ceil'].includes(name) && sel.size) { sel.clear(); refreshProps(); }
     tool = d.cls ? new d.cls(app, d.arg ?? args[0]) : null;
   }
   $$('#tools .tool').forEach((b) => b.classList.toggle('on', b.dataset.tool === toolName));
@@ -569,7 +576,7 @@ cv.addEventListener('auxclick', (e) => { if (e.button === 1 && e.detail === 2) z
 
 // ---------- Tastatur ----------
 let spaceDown = false;
-const KEYMAP = Object.fromEntries(Object.entries(TOOLS).filter(([k, v]) => v.key && v.key.length === 1 && (FEAT_DW || k !== 'wall')).map(([k, v]) => [v.key, k]));
+const KEYMAP = Object.fromEntries(Object.entries(TOOLS).filter(([k, v]) => v.key && v.key.length === 1 && (FEAT_DW || (k !== 'wall' && k !== 'ceil'))).map(([k, v]) => [v.key, k]));
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceDown = false; });
 window.addEventListener('keydown', (e) => {
   const tgt = e.target; const inField = tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT');
@@ -711,6 +718,7 @@ function renderOptbar() {
         ${[12.5, 15, 18, 25, 50, 75, 100].map((v) => `<button class="mini" data-off="${v}">${String(v).replace('.', ',')}</button>`).join('')}`;
       break;
     case 'wall': h += DWUI.optbarHtml(opts.wall); break; // Trockenbau
+    case 'ceil': h += CE.optbarHtml(opts.ceil); break;
     case 'text': case 'leader':
       h += `<span class="hint">Schrifthöhe wird im Dialog gewählt (Papier-mm, maßstabsunabhängig)</span>`;
       break;
@@ -722,6 +730,7 @@ $('#optbar').addEventListener('change', (e) => {
   const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
   const num = (x) => parseFloat(String(x).replace(',', '.'));
   if (k === 'layer') { state.doc.cur = v; M.autosave(); refreshLayers(); }
+  else if (k.startsWith('c.')) { if (CE.optbarChange(opts.ceil, k.slice(2), v) === 'rerender') renderOptbar(); if (tool) tool.update(); }
   else if (k.startsWith('w.')) { if (DWUI.optbarChange(opts.wall, k.slice(2), v) === 'rerender') renderOptbar(); if (tool) tool.update(); } // Trockenbau
   else if (k.startsWith('h.')) { const kk = k.slice(2); opts.hatch[kk] = kk === 'scale' ? (num(v) || 1) : v; if (kk === 'pattern') renderOptbar(); }
   else if (k.startsWith('s.')) { const kk = k.slice(2); state.doc.settings[kk] = ['dimDec', 'dimText'].includes(kk) ? num(v) : v; M.commit(); }
@@ -744,7 +753,7 @@ function updateHeader() {
   document.title = state.doc.name + ' – CADBase';
 }
 
-const TYPE_DE = { image: 'Plan-Unterlage', wall: 'Trockenbauwand', line: 'Linie', pline: 'Polylinie', circle: 'Kreis', arc: 'Bogen', hatch: 'Schraffur', dim: 'Bemaßung', text: 'Text', leader: 'Beschriftung' };
+const TYPE_DE = { ceiling: 'Decke', image: 'Plan-Unterlage', wall: 'Trockenbauwand', line: 'Linie', pline: 'Polylinie', circle: 'Kreis', arc: 'Bogen', hatch: 'Schraffur', dim: 'Bemaßung', text: 'Text', leader: 'Beschriftung' };
 function refreshProps() {
   const el = $('#tab-props'); const d = state.doc;
   const ents = d.ents.filter((e) => sel.has(e.id));
@@ -810,6 +819,7 @@ function refreshProps() {
   }
   if (one === 'wall') h += DWUI.propsHtml(ents, common, row); // Trockenbau
   if (one === 'image') h += UL.propsHtml(ents, common, row);
+  if (one === 'ceiling') h += CE.propsHtml(ents, common, row);
   if (!ents.every((e) => e.iso) && types.some((t) => !['dim', 'text', 'leader'].includes(t))) h += row('In 3D ausblenden', `<input type="checkbox" data-k="no3d" ${common('no3d') ? 'checked' : ''}>`);
   h += `<div class="pbtns"><button data-act="front">Nach vorne</button><button data-act="back">Nach hinten</button><button data-act="del" class="danger">Löschen</button></div>`;
   el.innerHTML = h;
@@ -831,6 +841,7 @@ $('#tab-props').addEventListener('change', (ev) => {
     if (v === '' && t.type !== 'checkbox') { delete e[k]; continue; }
     if (k === 'no3d' && !v) { delete e.no3d; continue; }
     if (e.type === 'wall') DWUI.propChanged(e, k, v); // Trockenbau
+    if (e.type === 'ceiling' && CE.propChanged(e, k, v) === 'handled') continue;
     if (t.dataset.num || ['r', 'scale', 'ext', 'z0', 'angle', 'tofs', 'h'].includes(k)) { const n = parseFloat(String(v).replace(',', '.')); if (!isNaN(n)) e[k] = n; }
     else e[k] = v;
   }
@@ -842,6 +853,7 @@ $('#tab-props').addEventListener('click', (ev) => {
   if (a === 'del') return deleteSel();
   if (a.startsWith('dw')) return DWUI.propAction(a, d.ents.filter((e) => sel.has(e.id))); // Trockenbau
   if (a.startsWith('ul')) return UL.propAction(a);
+  if (a.startsWith('ce')) return CE.propAction(a, d.ents.filter((e) => sel.has(e.id)));
   const s = d.ents.filter((e) => sel.has(e.id)), r = d.ents.filter((e) => !sel.has(e.id));
   d.ents = a === 'front' ? r.concat(s) : s.concat(r);
   app.commit();
@@ -1224,6 +1236,8 @@ new ResizeObserver(resize).observe($('#stage'));
 DWUI.initDrywall({ app, dialog, setTool, toast, getPref: M.getPref, setPref: M.setPref }); // Trockenbau
 UL.initUnderlay({ app, dialog, setTool, toast, getPref: M.getPref, setPref: M.setPref, refreshPanels: () => refreshAll() });
 setImageProvider(UL.imageFor);
+CE.initCeiling({ app, toast, refreshPanels: () => refreshAll() });
+setCeilingTakeoff(CE.ceilingTakeoff);
 $('#pdfIn').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) UL.importFile(f); });
 $('#stage').addEventListener('dragover', (e) => { e.preventDefault(); });
 $('#stage').addEventListener('drop', (e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (!f) return; if (/\.json$/i.test(f.name)) { const dt = new DataTransfer(); dt.items.add(f); $('#fileIn').files = dt.files; $('#fileIn').dispatchEvent(new Event('change')); } else UL.importFile(f); });

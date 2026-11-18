@@ -13,6 +13,7 @@ export function initDrywall(ctx) { C = ctx; }
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const walls = () => state.doc.ents.filter((e) => e.type === 'wall');
+const elements = () => state.doc.ents.filter((e) => e.type === 'wall' || e.type === 'ceiling');
 const num = (v) => String(v).replace('.', ',');
 
 // System-Auswahl gruppiert nach Kategorie
@@ -156,22 +157,24 @@ export function propAction(act, ents) {
     }
     C.app.commit();
   }
-  if (act === 'dwMass') massDialog(ents.filter((e) => e.type === 'wall'));
+  if (act === 'dwMass') massDialog(ents.filter((e) => e.type === 'wall' || e.type === 'ceiling'));
 }
 
 // ---------- Massenermittlung ----------
 export async function massDialog(selWalls) {
-  const all = walls();
-  if (!all.length) return C.toast('Noch keine Trockenbauwand gezeichnet (Werkzeug „Wand", Taste W)');
+  const all = elements();
+  if (!all.length) return C.toast('Noch keine Trockenbauwand oder Decke gezeichnet (Werkzeuge „Wand" W, „Decke" U)');
   let list = selWalls && selWalls.length ? selWalls : all;
   const P = Object.assign({ zuschlag: 5, strip: true, tfBoden: true, kgJoint: 0.25, kgArea: 0.15 }, C.getPref('dw.params', {}));
   const render = (body) => {
     const res = DW.takeoffAll(list, P);
     const warns = res.per.flatMap(({ w, q }) => q.warn.map((x) => `${w.name}: ${x}`));
     body.querySelector('#dwOut').innerHTML = `
-      <table class="mtab"><thead><tr><th>Wand</th><th>System</th><th class="r">Länge</th><th class="r">Höhe</th><th class="r">m²</th></tr></thead><tbody>
-      ${res.per.map(({ w, q }) => `<tr><td>${esc(w.name)}</td><td>${w.sys} · ${DW.profLabel(w.sys, w.prof)} · ${DW.SYSTEMS[w.sys]?.sides === 2 ? w.nA + '+' + w.nB : w.nB}× ${w.board} ${num(w.t)}</td><td class="r">${fmtNum(q.len / 1000, 2)} m</td><td class="r">${fmtNum(q.h / 1000, 2)} m</td><td class="r">${fmtNum(q.area, 2)}</td></tr>`).join('')}
-      <tr class="sum"><td colspan="4">Summe Wandfläche</td><td class="r">${fmtNum(res.area, 2)}</td></tr></tbody></table>
+      <table class="mtab"><thead><tr><th>Element</th><th>System</th><th class="r">Länge</th><th class="r">Höhe</th><th class="r">m²</th></tr></thead><tbody>
+      ${res.per.map(({ w, q }) => w.type === 'ceiling'
+    ? `<tr><td>${esc(w.name)}</td><td>${w.sys.replace('D112B', 'D112 direkt')} · ${w.layers}× ${w.board} ${num(w.t)}</td><td class="r">–</td><td class="r">–</td><td class="r">${fmtNum(q.area, 2)}</td></tr>`
+    : `<tr><td>${esc(w.name)}</td><td>${w.sys} · ${DW.profLabel(w.sys, w.prof)} · ${DW.SYSTEMS[w.sys]?.sides === 2 ? w.nA + '+' + w.nB : w.nB}× ${w.board} ${num(w.t)}</td><td class="r">${fmtNum(q.len / 1000, 2)} m</td><td class="r">${fmtNum(q.h / 1000, 2)} m</td><td class="r">${fmtNum(q.area, 2)}</td></tr>`).join('')}
+      ${res.area ? `<tr class="sum"><td colspan="4">Summe Wandfläche</td><td class="r">${fmtNum(res.area, 2)}</td></tr>` : ''}${res.areaC ? `<tr class="sum"><td colspan="4">Summe Deckenfläche</td><td class="r">${fmtNum(res.areaC, 2)}</td></tr>` : ''}</tbody></table>
       ${warns.length ? `<div class="pinfo warn">⚠ ${warns.map(esc).join('<br>⚠ ')}</div>` : ''}
       <table class="mtab"><thead><tr><th>Pos.</th><th>Material</th><th class="r">Menge</th><th>Einh.</th><th>Hinweis</th></tr></thead><tbody>
       ${res.rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.label)}</td><td class="r"><b>${DW.fmtQty(r)}</b></td><td>${r.unit}</td><td class="hint">${esc(r.note || '')}</td></tr>`).join('')}
@@ -181,14 +184,14 @@ export async function massDialog(selWalls) {
   let res = null;
   const html = `
     <div class="row3">
-      <label>Umfang<select id="dwScope"><option value="all">Alle Wände (${all.length})</option>${selWalls && selWalls.length && selWalls.length < all.length ? `<option value="sel" selected>Auswahl (${selWalls.length})</option>` : ''}</select></label>
+      <label>Umfang<select id="dwScope"><option value="all">Alle Elemente (${all.length})</option>${selWalls && selWalls.length && selWalls.length < all.length ? `<option value="sel" selected>Auswahl (${selWalls.length})</option>` : ''}</select></label>
       <label>Zuschlag Verbrauchsmaterial %<input id="dwZ" value="${P.zuschlag}" inputmode="decimal"></label>
       <label>Spachtel kg je m Fuge<input id="dwKg" value="${num(P.kgJoint)}" inputmode="decimal"></label>
     </div>
     <label class="chk"><input type="checkbox" id="dwStrip" ${P.strip ? 'checked' : ''}> Fugendeckstreifen / Glasfaserbewehrung ansetzen</label>
     <label class="chk"><input type="checkbox" id="dwTf" ${P.tfBoden ? 'checked' : ''}> Trenn-Fix auch am Bodenanschluss</label>
     <div id="dwOut"></div>
-    <p class="hint">Rechenwerte nach Knauf-Detailblättern W11/W61/W62: Ständer je Achsabstand + Endständer bzw. Riegel, Platten nach Format mit versetzten Stößen, Schrauben je Lage nach Schraubabstand, Randbefestigung je System, verschnittene Ecken mit Eckschutz. Ohne Öffnungen und T-Anschlüsse. Spachtel ist ein Schätzwert. Vor Bestellung prüfen.</p>`;
+    <p class="hint">Rechenwerte nach Knauf-Detailblättern W11/W61/W62 und D11/D13 (Decken: Profilraster mit Randabständen, Abhängerabstand nach Tabelle je Lastklasse, Schrauben je m² nach Knauf-Materialbedarf); Ständer je Achsabstand + Endständer bzw. Riegel, Platten nach Format mit versetzten Stößen, Schrauben je Lage nach Schraubabstand, Randbefestigung je System, verschnittene Ecken mit Eckschutz. Ohne Öffnungen und T-Anschlüsse. Spachtel ist ein Schätzwert. Vor Bestellung prüfen.</p>`;
   const r = await C.dialog('Massenermittlung Trockenbau (Test)', html, [{ t: 'Schließen' }, { t: 'CSV / Excel', v: 'csv' }, { t: 'Als Tabelle in Zeichnung', v: 'tab', primary: true }], (body) => {
     const upd = () => {
       P.zuschlag = parseFloat(body.querySelector('#dwZ').value.replace(',', '.')) || 0;
@@ -205,7 +208,7 @@ export async function massDialog(selWalls) {
   if (r.v === 'csv') {
     const n = (x) => String(x).replace('.', ',');
     const lines = [['Pos.', 'Material', 'Menge', 'Einheit', 'Hinweis'].join(';'), ...res.rows.map((x, i) => [i + 1, `"${x.label}"`, n(DW.fmtQty(x)), x.unit, `"${x.note || ''}"`].join(';')),
-      '', ['Wand', 'System', 'Länge m', 'Höhe m', 'Fläche m²'].join(';'), ...res.per.map(({ w, q }) => [`"${w.name}"`, `${w.sys} ${DW.profLabel(w.sys, w.prof)} ${w.board} ${w.t}`, n(fmtNum(q.len / 1000, 3)), n(fmtNum(q.h / 1000, 3)), n(fmtNum(q.area, 3))].join(';'))];
+      '', ['Element', 'System', 'Länge m', 'Höhe m', 'Fläche m²'].join(';'), ...res.per.map(({ w, q }) => [`"${w.name}"`, w.type === 'ceiling' ? `${w.sys} ${w.layers}x ${w.board} ${w.t}` : `${w.sys} ${DW.profLabel(w.sys, w.prof)} ${w.board} ${w.t}`, n(fmtNum(q.len / 1000, 3)), n(fmtNum(q.h / 1000, 3)), n(fmtNum(q.area, 3))].join(';'))];
     download((state.doc.name || 'Massen').replace(/[^\wäöüÄÖÜß\- ]+/g, '') + '_Massen.csv', '﻿' + lines.join('\r\n'), 'text/csv');
   }
   if (r.v === 'tab') { C.setTool(new PlaceTool(C.app, DW.tableEnts(res, C.app.layerFor), 'Massentabelle')); C.toast('Tabelle hängt am Cursor – Einfügepunkt wählen'); }

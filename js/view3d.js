@@ -28,6 +28,7 @@ export class View3D {
     let bb = null;
     const list = [];
     for (const e of d.ents) { // Trockenbau: Wände in Platten/Dämmung zerlegen, Höhe = Wandhöhe
+      if (e.type === 'ceiling') { if (layerById(e.layer).vis && !e.no3d) list.push({ id: '_c3', type: 'hatch', layer: e.layer, pts: e.pts, holes: e.holes, pattern: 'gips', ext: (+e.layers || 1) * (+e.t || 12.5), z0: +e.z || 2750 }); continue; }
       if (e.type !== 'wall') { list.push(e); continue; }
       if (!layerById(e.layer).vis || e.no3d) continue;
       for (const s of wallParts3D(e)) list.push(s);
